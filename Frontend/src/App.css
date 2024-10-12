@@ -231,7 +231,6 @@ body {
 }
 
 .welcome-container,
-.graphs-container,
 .training-plan-container {
   text-align: center;
   padding: 2rem;
@@ -240,4 +239,23 @@ body {
 .sort-indicator {
   display: inline-block;
   margin-left: 0.5rem;
+}
+
+.graphs-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.chart {
+  background-color: #f5f5f5;
+  border-radius: 8px;
+  padding: 15px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.chart h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 1.2em;
 }

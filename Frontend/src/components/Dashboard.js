@@ -8,13 +8,12 @@ const Dashboard = ({ activities, isAuthenticated }) => {
     const [activeTab, setActiveTab] = useState('all');
 
     useEffect(() => {
-        if (isAuthenticated) {
-            setActiveTab('all');
-        }
-    }, [isAuthenticated]);
+        console.log('Dashboard received activities:', activities);
+        console.log('Dashboard isAuthenticated:', isAuthenticated);
+    }, [activities, isAuthenticated]);
 
     if (!isAuthenticated) {
-        return null; // Or you could render a loading spinner here
+        return <div>Please authenticate to view the dashboard.</div>;
     }
 
     return (
@@ -27,10 +26,10 @@ const Dashboard = ({ activities, isAuthenticated }) => {
                     Activities
                 </button>
                 <button 
-                    className={`tab-button ${activeTab === 'graphs' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('graphs')}
+                    className={`tab-button ${activeTab === 'charts' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('charts')}
                 >
-                    Performance Tracking
+                    Performance Charts
                 </button>
                 <button 
                     className={`tab-button ${activeTab === 'trainingPlan' ? 'active' : ''}`}
@@ -44,13 +43,13 @@ const Dashboard = ({ activities, isAuthenticated }) => {
                 {activeTab === 'all' && (
                     <>
                         <h2>Activities</h2>
-                        <ActivityTable data={activities} />
+                        <ActivityTable data={activities || []} />
                     </>
                 )}
-                {activeTab === 'graphs' && (
-                    <div className="graphs-container">
-                        <h2>Performance Tracking</h2>
-                        <Graphs />
+                {activeTab === 'charts' && (
+                    <div className="charts-container">
+                        <h2>Performance Charts</h2>
+                        <Graphs activities={activities} />
                     </div>
                 )}
                 {activeTab === 'trainingPlan' && (
