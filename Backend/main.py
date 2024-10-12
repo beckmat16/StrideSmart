@@ -1,9 +1,10 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.responses import RedirectResponse
 import requests
 import mysql.connector
 from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
+
 
 app = FastAPI()
 
@@ -13,15 +14,12 @@ CLIENT_SECRET = "874eff85ee2e7337c18b91c7efada854f865c078"
 AUTHORIZATION_URL = "https://www.strava.com/oauth/authorize"
 TOKEN_URL = "https://www.strava.com/oauth/token"
 REDIRECT_URI = "http://127.0.0.1:8000/oauth2/callback"
-ACCESS_TOKEN = None
-
-##Any other variables
-json_data= ""
+SCOPE = "activity:read_all,read" 
 
 ##Allow CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust this to your domain or use "*" for all
+    allow_origins=["*"],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -41,124 +39,250 @@ def create_connection():
     except Error as e:
         return None
 
-##Create endpoint for SQL data
-@app.get("/training")
-def get_stored_activities():
+##Helper Functions
+def store_tokens(athlete_id, access_token, refresh_token):
     connection = create_connection()
+    if not connection:
+        raise HTTPException(status_code=500, detail="Database connection failed")
+    
+    cursor = connection.cursor()
+    try:
+        cursor.execute(
+            """
+            INSERT INTO users (athlete_id, access_token, refresh_token, created_at, updated_at) 
+            VALUES (%s, %s, %s, NOW(), NOW())
+            ON DUPLICATE KEY UPDATE 
+                access_token = %s,
+                refresh_token = %s,
+                updated_at = NOW()
+            """,
+            (athlete_id, access_token, refresh_token, access_token, refresh_token)
+        )
+        connection.commit()
+    except Error as e:
+        print(f"Error storing tokens: {e}")
+        raise HTTPException(status_code=500, detail="Failed to store tokens")
+    finally:
+        cursor.close()
+        connection.close()
+def get_user_tokens(athlete_id):
+    connection = create_connection()
+    if not connection:
+        raise HTTPException(status_code=500, detail="Database connection failed")
+    
     cursor = connection.cursor(dictionary=True)
-    
-    cursor.execute("SELECT * FROM activities")
-    activities = cursor.fetchall()
-    
-    cursor.close()
-    connection.close()
-    return activities
+    try:
+        cursor.execute(
+            "SELECT access_token, refresh_token FROM users WHERE athlete_id = %s",
+            (athlete_id,)
+        )
+        result = cursor.fetchone()
+        return result if result else None
+    finally:
+        cursor.close()
+        connection.close()
 
-
-##Workflow 1 -Log in and redirect to authorization page from strava
-@app.get("/login")
-def login():
-    authorization_url = (
-        f"{AUTHORIZATION_URL}?client_id={CLIENT_ID}&response_type=code"
-        f"&redirect_uri={REDIRECT_URI}&scope=activity:read"
-    )
-    return RedirectResponse(url=authorization_url)
-
-##Workflow 2 - Obtain access token
-@app.get("/oauth2/callback")
-def oauth2_callback(code: str):
-    global ACCESS_TOKEN
+def refresh_access_token(refresh_token):
+    """Refresh the access token using the refresh token"""
     response = requests.post(
         TOKEN_URL,
         data={
             "client_id": CLIENT_ID,
             "client_secret": CLIENT_SECRET,
-            "code": code,
-            "grant_type": "authorization_code",
-            "redirect_uri": REDIRECT_URI,
-        },
+            "refresh_token": refresh_token,
+            "grant_type": "refresh_token"
+        }
     )
     
-    if response.status_code == 200:
-        token_info = response.json()
-        ACCESS_TOKEN = token_info["access_token"]
-        return {"access_token": ACCESS_TOKEN}
-    else:
-        raise HTTPException(status_code=response.status_code, detail="Failed to obtain access token")
-
-##Workflow 3 - fetch data from the activity
-@app.get("/activities/{id}")
-def get_activity(id: int, include_all_efforts: bool = False):
-    if not ACCESS_TOKEN:
-        raise HTTPException(status_code=401, detail="Unauthorized: Access token is missing")
+    if response.status_code != 200:
+        raise HTTPException(status_code=401, detail="Failed to refresh token")
     
-    url = f"https://www.strava.com/api/v3/activities/{id}"
-    headers = {
-        "Authorization": f"Bearer {ACCESS_TOKEN}"
-    }
-    params = {
-        "include_all_efforts": include_all_efforts
-    }
+    return response.json()
+
+def fetch_last_30_activities(access_token):
+    """Fetch the last 30 activities from Strava"""
+    url = "https://www.strava.com/api/v3/athlete/activities"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    params = {"per_page": 30}
+    
     response = requests.get(url, headers=headers, params=params)
     
-    if response.status_code == 200:
-        json_data = response.json()
-        # Extract relevant fields from JSON
-        id = json_data["id"]
-        name = json_data["name"]
-        distance = json_data["distance"]
-        moving_time = json_data["moving_time"]
-        elapsed_time = json_data["elapsed_time"]
-        total_elevation_gain = json_data["total_elevation_gain"]
-        type = json_data["type"]
-        start_date = datetime.strptime(json_data["start_date"], '%Y-%m-%dT%H:%M:%SZ')
-        start_date_local = datetime.strptime(json_data["start_date_local"], '%Y-%m-%dT%H:%M:%SZ')
-        timezone = json_data["timezone"]
-        location_country = json_data["location_country"]
-        average_speed = json_data["average_speed"]
-        max_speed = json_data["max_speed"]
-        average_cadence = json_data.get("average_cadence", None)
-        average_heartrate = json_data.get("average_heartrate", None)
-        max_heartrate = json_data.get("max_heartrate", None)
-        calories = json_data.get("calories", None)
-        trainer = json_data["trainer"]
-        commute = json_data["commute"]
-        manual = json_data["manual"]
-        private = json_data["private"]
+    if response.status_code != 200:
+        raise HTTPException(status_code=response.status_code, detail="Failed to fetch activities")
+    
+    return response.json()
 
-        # Move fields to SQL/create connection
-        connection = create_connection()
-        cursor = connection.cursor()
-        
-        # SQL INSERT statement
-        insert_query = """
-        INSERT INTO activities (id, name, distance, moving_time, elapsed_time, 
-                                total_elevation_gain, type, start_date, 
-                                start_date_local, timezone, location_country, 
-                                average_speed, max_speed, average_cadence, 
-                                average_heartrate, max_heartrate, calories, 
-                                trainer, commute, manual, private) 
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,%s)
-        """
-        data_to_insert = (id, name, distance, moving_time, 
-                      elapsed_time, total_elevation_gain, type, 
-                      start_date, start_date_local, timezone, 
-                      location_country, average_speed, max_speed, 
-                      average_cadence, average_heartrate, 
-                      max_heartrate, calories, trainer, commute, 
-                      manual, private)
-        
-        cursor.execute(insert_query, data_to_insert)
-        connection.commit()  # Commit the transaction
-        print("Data inserted successfully")
-
-        # Close the cursor and connection
+def get_existing_activity_ids(athlete_id):
+    connection = create_connection()
+    if not connection:
+        raise HTTPException(status_code=500, detail="Database connection failed")
+    
+    cursor = connection.cursor()
+    try:
+        cursor.execute(
+            "SELECT id FROM activities WHERE athlete_id = %s",
+            (athlete_id,)
+        )
+        return [row[0] for row in cursor.fetchall()]
+    finally:
         cursor.close()
         connection.close()
-        return response.json()
+
+def store_new_activities(activities, existing_ids):
+    """Store new activities in the database"""
+    connection = create_connection()
+    if not connection:
+        raise HTTPException(status_code=500, detail="Database connection failed")
     
+    cursor = connection.cursor()
+    try:
+        for activity in activities:
+            if activity["id"] not in existing_ids:
+                # Convert timestamps
+                start_date = datetime.strptime(activity["start_date"], '%Y-%m-%dT%H:%M:%SZ')
+                start_date_local = datetime.strptime(activity["start_date_local"], '%Y-%m-%dT%H:%M:%SZ')
+
+                athlete_id = activity["athlete"]["id"]  # Fix: Extract the athlete_id correctly
+
+                # Define the data tuple to be inserted
+                data = (
+                    activity["id"],
+                    activity["name"],
+                    activity["distance"],
+                    activity["moving_time"],
+                    activity["elapsed_time"],
+                    activity["total_elevation_gain"],
+                    activity["type"],
+                    start_date,
+                    start_date_local,
+                    activity["timezone"],
+                    activity["average_speed"],
+                    activity["max_speed"],
+                    activity.get("average_cadence"),  # Use .get() to avoid KeyError
+                    activity.get("average_heartrate"),  # Use .get() to avoid KeyError
+                    activity.get("max_heartrate"),  # Use .get() to avoid KeyError
+                    activity.get("calories"),
+                    activity["athlete"]["id"],
+                )
+                
+                insert_query = """
+                INSERT INTO activities (
+                    id, name, distance, moving_time, elapsed_time, 
+                    total_elevation_gain, type, start_date, start_date_local, 
+                    timezone, average_speed, max_speed, average_cadence, 
+                    average_heartrate, max_heartrate, calories, athlete_id
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    name = VALUES(name),
+                    distance = VALUES(distance),
+                    moving_time = VALUES(moving_time),
+                    elapsed_time = VALUES(elapsed_time),
+                    total_elevation_gain = VALUES(total_elevation_gain),
+                    type = VALUES(type),
+                    start_date = VALUES(start_date),
+                    start_date_local = VALUES(start_date_local),
+                    timezone = VALUES(timezone),
+                    average_speed = VALUES(average_speed),
+                    max_speed = VALUES(max_speed),
+                    average_cadence = VALUES(average_cadence),
+                    average_heartrate = VALUES(average_heartrate),
+                    max_heartrate = VALUES(max_heartrate),
+                    calories = VALUES(calories),
+                    athlete_id = VALUES(athlete_id)
+                """
+                
+                cursor.execute(insert_query, data)
+                
+        connection.commit()
+    except Exception as e:
+        print(f"Error storing activities: {e}")
+        connection.rollback()
+        raise HTTPException(status_code=500, detail="Failed to store activities")
+    finally:
+        cursor.close()
+        connection.close()
+##Endpoints: 
+@app.get("/login")
+def login():
+    authorization_url = (
+        f"{AUTHORIZATION_URL}?client_id={CLIENT_ID}&response_type=code"
+        f"&redirect_uri={REDIRECT_URI}&scope=activity:read_all"
+    )
+    return RedirectResponse(url=authorization_url)
+
+
+@app.get("/oauth2/callback")
+async def oauth2_callback(request: Request, code: str = Query(None)):
+    if code:
+        print(f"Authorization code received: {code}")
+        
+        # Step 1: Exchange the code for an access token
+        response = requests.post(
+            TOKEN_URL,
+            data={
+                "client_id": CLIENT_ID,
+                "client_secret": CLIENT_SECRET,
+                "code": code,
+                "grant_type": "authorization_code",
+                "redirect_uri": REDIRECT_URI
+            },
+        )
+
+        # Step 2: Check if the token exchange was successful
+        if response.status_code == 200:
+            token_info = response.json()
+            access_token = token_info.get("access_token")
+            refresh_token = token_info.get("refresh_token")
+            athlete_id = token_info["athlete"]["id"]
+
+            print(f"Access Token: {access_token}")
+            print(f"Refresh Token: {refresh_token}")
+            print(f"Athlete ID: {athlete_id}")
+
+            # Step 3: Store tokens and proceed
+            try:
+                store_tokens(athlete_id, access_token, refresh_token)
+                print(f"Tokens successfully stored for athlete {athlete_id}")
+            except Exception as e:
+                print(f"Error storing tokens: {e}")
+                raise HTTPException(status_code=500, detail="Failed to store tokens")
+            
+            # Step 4: Fetch and store the last 30 activities
+            try:
+                recent_activities = fetch_last_30_activities(access_token)
+                print(f"Fetched {len(recent_activities)} activities")
+                existing_ids = get_existing_activity_ids(athlete_id)
+                print(f"Existing Activity IDs: {existing_ids}")
+                store_new_activities(recent_activities, existing_ids)
+                print(f"Activities successfully stored for athlete {athlete_id}")
+            except Exception as e:
+                print(f"Error processing authentication: {e}")
+                raise HTTPException(status_code=500, detail="Failed to process authentication")
+
+            # Redirect to frontend with success parameter and athlete_id
+            return RedirectResponse(url=f"http://localhost:3001/dashboard?success=true&athlete_id={athlete_id}")
+        else:
+            print(f"Failed to obtain access token: {response.text}")
+            raise HTTPException(status_code=response.status_code, detail="Failed to obtain access token")
     else:
-        raise HTTPException(status_code=response.status_code, detail=response.text)
+        print("No authorization code received")
+        return {"error": "Authorization code missing"}
+
+@app.get("/training")
+def get_stored_activities():
+    """Retrieve stored activities from the database"""
+    connection = create_connection()
+    if not connection:
+        raise HTTPException(status_code=500, detail="Database connection failed")
+    
+    cursor = connection.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT * FROM activities ORDER BY start_date DESC")
+        activities = cursor.fetchall()
+        return activities
+    finally:
+        cursor.close()
+        connection.close()
 
 if __name__ == "__main__":
     import uvicorn
