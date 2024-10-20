@@ -4,22 +4,26 @@ import requests
 import mysql.connector
 from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
 
 app = FastAPI()
 
 ##My Strava Data
-CLIENT_ID = "132274"
-CLIENT_SECRET = "874eff85ee2e7337c18b91c7efada854f865c078"
-AUTHORIZATION_URL = "https://www.strava.com/oauth/authorize"
-TOKEN_URL = "https://www.strava.com/oauth/token"
-REDIRECT_URI = "http://127.0.0.1:8000/oauth2/callback"
-SCOPE = "activity:read_all,read" 
+CLIENT_ID = os.getenv('STRAVA_CLIENT_ID')
+CLIENT_SECRET = os.getenv('STRAVA_CLIENT_SECRET')
+AUTHORIZATION_URL = os.getenv('STRAVA_AUTHORIZATION_URL')
+TOKEN_URL = os.getenv('STRAVA_TOKEN_URL')
+REDIRECT_URI = os.getenv('STRAVA_REDIRECT_URI')
+SCOPE = os.getenv('STRAVA_SCOPE')
+FRONTEND_URL = os.getenv('FRONTEND_URL')
 
 ##Allow CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  
+    allow_origins=[FRONTEND_URL],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -29,10 +33,10 @@ app.add_middleware(
 def create_connection():
     try:
         connection = mysql.connector.connect(
-            host='localhost',
-            database='stravadata',
-            user='root',
-            password='410220920Hh!'
+            host=os.getenv('DB_HOST'),
+            database=os.getenv('DB_NAME'),
+            user=os.getenv('DB_USER'),
+            password=os.getenv('DB_PASS')
         )
         if connection.is_connected():
             return connection
@@ -235,9 +239,7 @@ async def oauth2_callback(request: Request, code: str = Query(None)):
             refresh_token = token_info.get("refresh_token")
             athlete_id = token_info["athlete"]["id"]
 
-            print(f"Access Token: {access_token}")
-            print(f"Refresh Token: {refresh_token}")
-            print(f"Athlete ID: {athlete_id}")
+            print(f"Tokens received for athlete {athlete_id}")
 
             # Step 3: Store tokens and proceed
             try:
@@ -260,7 +262,7 @@ async def oauth2_callback(request: Request, code: str = Query(None)):
                 raise HTTPException(status_code=500, detail="Failed to process authentication")
 
             # Redirect to frontend with success parameter and athlete_id
-            return RedirectResponse(url=f"http://localhost:3001/dashboard?success=true&athlete_id={athlete_id}")
+            return RedirectResponse(url=f"{FRONTEND_URL}/dashboard?success=true&athlete_id={athlete_id}")
         else:
             print(f"Failed to obtain access token: {response.text}")
             raise HTTPException(status_code=response.status_code, detail="Failed to obtain access token")
@@ -269,15 +271,15 @@ async def oauth2_callback(request: Request, code: str = Query(None)):
         return {"error": "Authorization code missing"}
 
 @app.get("/training")
-def get_stored_activities():
-    """Retrieve stored activities from the database"""
+async def get_stored_activities(athlete_id: int):
+    """Retrieve stored activities from the database for a specific athlete"""
     connection = create_connection()
     if not connection:
         raise HTTPException(status_code=500, detail="Database connection failed")
     
     cursor = connection.cursor(dictionary=True)
     try:
-        cursor.execute("SELECT * FROM activities ORDER BY start_date DESC")
+        cursor.execute("SELECT * FROM activities WHERE athlete_id = %s ORDER BY start_date DESC", (athlete_id,))
         activities = cursor.fetchall()
         return activities
     finally:
@@ -286,13 +288,9 @@ def get_stored_activities():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run(app, host=os.getenv('SERVER_HOST'), port=os.getenv('SERVER_PORT'), reload=True)
 
 #fastapi dev .venv/main.py
 #fastapi dev main.py
 # uvicorn main:app --reload
 #uvicorn .venv/main.py:app --reload
-#strava client: 874eff85ee2e7337c18b91c7efada854f865c078
-#strava_access_token: 0db1d46556e992a133b159a6d486ff163d9e580a
-#strava_refresh_token: aa58ba8435b5792fbe62c2701edc3ef24be97251
-#https://www.strava.com/oauth/authorize?client_id=132274&redirect_uri=http://localhost&response_type=code&scope=activity:read_all
