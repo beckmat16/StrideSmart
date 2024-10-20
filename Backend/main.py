@@ -9,6 +9,11 @@ import os
 
 load_dotenv()
 
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
+
 app = FastAPI()
 
 ##My Strava Data
@@ -23,7 +28,7 @@ FRONTEND_URL = os.getenv('FRONTEND_URL')
 ##Allow CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_URL],  
+    allow_origins=[os.getenv("FRONTEND_URL", "http://localhost:3000")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -36,7 +41,8 @@ def create_connection():
             host=os.getenv('DB_HOST'),
             database=os.getenv('DB_NAME'),
             user=os.getenv('DB_USER'),
-            password=os.getenv('DB_PASS')
+            password=os.getenv('DB_PASS'),
+            port=os.getenv('DB_PORT',3306)
         )
         if connection.is_connected():
             return connection
