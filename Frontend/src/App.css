@@ -30,7 +30,7 @@
 }
 
 body {
-  background-image: url('/vintage_marathon.jpg');
+  background-image: url('%PUBLIC_URL%/vintage_marathon.jpg');
   background-size: cover;
   background-position: center; 
   background-repeat: no-repeat;
