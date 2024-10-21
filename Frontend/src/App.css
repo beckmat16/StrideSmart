@@ -30,7 +30,7 @@
 }
 
 body {
-  background-image: url('/Users/matthewbecker/my-training-app/Frontend/public/vintage_marathon.jpg');
+  background-image: url('/vintage_marathon.jpg');
   background-size: cover;
   background-position: center; 
   background-repeat: no-repeat;
