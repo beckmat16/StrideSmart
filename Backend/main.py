@@ -206,6 +206,10 @@ def store_new_activities(activities, existing_ids):
         cursor.close()
         connection.close()
 ##Endpoints: 
+@app.get("/")
+async def root():
+    return {"message": "Welcome to the StrideSmart API"}
+
 @app.get("/login")
 def login():
     authorization_url = (
