@@ -9,11 +9,6 @@ import os
 
 load_dotenv()
 
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
-
 app = FastAPI()
 
 ##My Strava Data
@@ -22,7 +17,6 @@ CLIENT_SECRET = os.getenv('STRAVA_CLIENT_SECRET')
 AUTHORIZATION_URL = os.getenv('STRAVA_AUTHORIZATION_URL')
 TOKEN_URL = os.getenv('STRAVA_TOKEN_URL')
 REDIRECT_URI = os.getenv('STRAVA_REDIRECT_URI')
-SCOPE = os.getenv('STRAVA_SCOPE')
 FRONTEND_URL = os.getenv('FRONTEND_URL')
 
 ##Allow CORS for frontend
@@ -294,7 +288,7 @@ async def get_stored_activities(athlete_id: int):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host=os.getenv('SERVER_HOST'), port=os.getenv('SERVER_PORT'), reload=True)
+    uvicorn.run(app, host=os.getenv('SERVER_HOST', '127.0.0.1'), port=os.getenv('SERVER_PORT', 8000), reload=True)
 
 #fastapi dev .venv/main.py
 #fastapi dev main.py
