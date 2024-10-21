@@ -5,12 +5,13 @@ import StravaAuthButton from './components/loginComponent';
 import Dashboard from './components/Dashboard';
 
 const API_URL = process.env.REACT_APP_API_URL;
+console.log('REACT_APP_API_URL:', process.env.REACT_APP_API_URL);
+console.log('API_URL:', API_URL);
 
 if (!API_URL) {
-  throw new Error('REACT_APP_API_URL is not defined in the environment');
+    console.error('REACT_APP_API_URL is not defined in the environment');
+    throw new Error('REACT_APP_API_URL is not defined in the environment');
 }
-
-console.log('API_URL:', API_URL);
 
 const AppContent = () => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);

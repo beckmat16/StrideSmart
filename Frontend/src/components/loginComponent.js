@@ -2,6 +2,11 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+// Determine the API URL based on the environment
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+
+console.log('Current API_URL:', API_URL); // Debug log
+
 const StravaAuthButton = ({ onAuthSuccess }) => {
   const [error, setError] = useState(null);
   const navigate = useNavigate();
@@ -15,7 +20,7 @@ const StravaAuthButton = ({ onAuthSuccess }) => {
 
       if (code) {
         try {
-          const response = await fetch('http://localhost:8000/exchange_token', {
+          const response = await fetch(`${API_URL}/exchange_token`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -45,7 +50,8 @@ const StravaAuthButton = ({ onAuthSuccess }) => {
   }, [onAuthSuccess, navigate]);
 
   const handleAuth = () => {
-    window.location.href = 'http://localhost:8000/login';
+    console.log('Redirecting to:', `${API_URL}/login`); // Debug log
+    window.location.href = `${API_URL}/login`;
   };
 
   if (error) {
