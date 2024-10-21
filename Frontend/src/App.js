@@ -10,6 +10,8 @@ if (!API_URL) {
   throw new Error('REACT_APP_API_URL is not defined in the environment');
 }
 
+console.log('API_URL:', API_URL);
+
 const AppContent = () => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [activities, setActivities] = useState([]);
