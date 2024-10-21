@@ -50,9 +50,8 @@ const StravaAuthButton = ({ onAuthSuccess }) => {
   }, [onAuthSuccess, navigate]);
 
   const handleAuth = () => {
-    const loginUrl = `${API_URL.replace(/\/$/, '')}/login`;
-    console.log('Redirecting to:', loginUrl); // Debug log
-    window.location.href = loginUrl;
+    console.log('Redirecting to:', `${API_URL}/login`); // Debug log
+    window.location.href = `${API_URL}/login`;
   };
 
   if (error) {
