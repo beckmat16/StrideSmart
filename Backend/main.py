@@ -41,7 +41,7 @@ def create_connection():
             database=os.getenv('DB_NAME'),
             user=os.getenv('DB_USER'),
             password=os.getenv('DB_PASS'),
-            port=os.getenv('DB_PORT',3306)
+            port=int(os.getenv('DB_PORT',3306))
         )
         if connection.is_connected():
             return connection
@@ -221,6 +221,7 @@ def login():
         f"{AUTHORIZATION_URL}?client_id={CLIENT_ID}&response_type=code"
         f"&redirect_uri={REDIRECT_URI}&scope=activity:read_all"
     )
+    print(f"Redirecting to Strava: {authorization_url}")  # Debug log
     return RedirectResponse(url=authorization_url)
 
 
