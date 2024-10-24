@@ -44,6 +44,7 @@ def create_connection():
             port=int(os.getenv('DB_PORT',3306))
         )
         if connection.is_connected():
+            print(os.getenv('DB_NAME'))
             return connection
     except Error as e:
         return None
@@ -291,6 +292,7 @@ async def get_stored_activities(athlete_id: int):
     try:
         cursor.execute("SELECT * FROM activities WHERE athlete_id = %s ORDER BY start_date DESC", (athlete_id,))
         activities = cursor.fetchall()
+        print(f"Retrieved {len(activities)} activities for athlete {athlete_id}")  # New log
         return activities
     finally:
         cursor.close()
