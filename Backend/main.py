@@ -133,7 +133,10 @@ def get_existing_activity_ids(athlete_id):
             "SELECT id FROM activities WHERE athlete_id = %s",
             (athlete_id,)
         )
-        return [row[0] for row in cursor.fetchall()]
+        ids = [row[0] for row in cursor.fetchall()]
+        print(f"Fetched {len(ids)} existing activity IDs for athlete {athlete_id}")
+        print(f"Sample of existing IDs: {ids[:5]}")  # Print first 5 IDs as a sample
+        return ids
     finally:
         cursor.close()
         connection.close()
@@ -146,13 +149,14 @@ def store_new_activities(activities, existing_ids):
     
     cursor = connection.cursor()
     try:
+        new_activities_count = 0
         for activity in activities:
             if activity["id"] not in existing_ids:
                 # Convert timestamps
                 start_date = datetime.strptime(activity["start_date"], '%Y-%m-%dT%H:%M:%SZ')
                 start_date_local = datetime.strptime(activity["start_date_local"], '%Y-%m-%dT%H:%M:%SZ')
 
-                athlete_id = activity["athlete"]["id"]  # Fix: Extract the athlete_id correctly
+                athlete_id = activity["athlete"]["id"]
 
                 # Define the data tuple to be inserted
                 data = (
@@ -168,11 +172,11 @@ def store_new_activities(activities, existing_ids):
                     activity["timezone"],
                     activity["average_speed"],
                     activity["max_speed"],
-                    activity.get("average_cadence"),  # Use .get() to avoid KeyError
-                    activity.get("average_heartrate"),  # Use .get() to avoid KeyError
-                    activity.get("max_heartrate"),  # Use .get() to avoid KeyError
+                    activity.get("average_cadence"),
+                    activity.get("average_heartrate"),
+                    activity.get("max_heartrate"),
                     activity.get("calories"),
-                    activity["athlete"]["id"],
+                    athlete_id,
                 )
                 
                 insert_query = """
@@ -201,9 +205,14 @@ def store_new_activities(activities, existing_ids):
                     athlete_id = VALUES(athlete_id)
                 """
                 
+                print(f"Inserting new activity: {activity['id']} for athlete {athlete_id}")
                 cursor.execute(insert_query, data)
-                
+                new_activities_count += 1
+            else:
+                print(f"Activity {activity['id']} already exists, skipping")
+        
         connection.commit()
+        print(f"Successfully stored {new_activities_count} new activities")
     except Exception as e:
         print(f"Error storing activities: {e}")
         connection.rollback()
@@ -292,7 +301,11 @@ async def get_stored_activities(athlete_id: int):
     try:
         cursor.execute("SELECT * FROM activities WHERE athlete_id = %s ORDER BY start_date DESC", (athlete_id,))
         activities = cursor.fetchall()
-        print(f"Retrieved {len(activities)} activities for athlete {athlete_id}")  # New log
+        print(f"Retrieved {len(activities)} activities for athlete {athlete_id}")
+        if activities:
+            print(f"Sample activity: {activities[0]}")  # Print the first activity as a sample
+        else:
+            print("No activities found for this athlete")
         return activities
     finally:
         cursor.close()
