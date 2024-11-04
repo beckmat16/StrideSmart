@@ -34,7 +34,7 @@ const AITrainingPlan = () => {
 
     return (
         <div className="training-plan-container">
-            <h2>Generate AI Training Plan</h2>
+            <h2>Weekly Rundown</h2>
             <FormComponent onSubmit={handleSubmit} />
             
             {loading && <div className="loading">Analyzing your training data...</div>}
