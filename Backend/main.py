@@ -405,7 +405,7 @@ Consider the relationship between heart rate and pace, training volume progressi
 
     try:
         response = openai.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o-mini",
             messages=[
                 {
                     "role": "system",
