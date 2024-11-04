@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import ActivityTable from './ActivityTable.js'; // Assuming you have this component
+import ActivityTable from './ActivityTable.js'; 
 import Graphs from './Graphs.js';
-import AITrainingPlan from './AITrainingPlan.js'; // Placeholder for your future AI plan
+import AITrainingPlan from './AITrainingPlan.js';
 import { meters_to_miles, convert_mile_pace, formatDate } from './utils';
 
 const Dashboard = ({ activities, isAuthenticated }) => {

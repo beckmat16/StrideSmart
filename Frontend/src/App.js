@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate, useLocation } from 'react-router-dom';
 import './App.css';
-import StravaAuthButton from './components/loginComponent';
-import Dashboard from './components/Dashboard';
-import AITrainingPlan from './AITrainingPlan';
+import StravaAuthButton from './components/loginComponent.js';
+import Dashboard from './components/Dashboard.js';
 
 const API_URL = process.env.REACT_APP_API_URL;
 console.log('REACT_APP_API_URL:', process.env.REACT_APP_API_URL);
