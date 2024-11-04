@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import FormComponent from './FormComponent';
+import FormComponent from './formcomponent';
 
 const AITrainingPlan = () => {
     const [output, setOutput] = useState(null);
