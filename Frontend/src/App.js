@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Route, Routes, Navigate, useLocation } from 'r
 import './App.css';
 import StravaAuthButton from './components/loginComponent';
 import Dashboard from './components/Dashboard';
+import AITrainingPlan from './AITrainingPlan';
 
 const API_URL = process.env.REACT_APP_API_URL;
 console.log('REACT_APP_API_URL:', process.env.REACT_APP_API_URL);
