@@ -6,19 +6,22 @@ from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
+import openai
+from mysql.connector import Error
 
 
 load_dotenv()
 
 app = FastAPI()
 
-##My Strava Data
+##My Strava Data/Variable Data
 CLIENT_ID = os.getenv('STRAVA_CLIENT_ID')
 CLIENT_SECRET = os.getenv('STRAVA_CLIENT_SECRET')
 AUTHORIZATION_URL = os.getenv('STRAVA_AUTHORIZATION_URL')
 TOKEN_URL = os.getenv('STRAVA_TOKEN_URL')
 REDIRECT_URI = os.getenv('STRAVA_REDIRECT_URI')
 FRONTEND_URL = os.getenv('FRONTEND_URL')
+openai.api_key=os.getenv('OPENAI_API_KEY')
 
 ##Allow CORS for frontend
 app.add_middleware(
@@ -121,6 +124,36 @@ def fetch_last_30_activities(access_token):
         raise HTTPException(status_code=response.status_code, detail="Failed to fetch activities")
     
     return response.json()
+
+def weekly_summary_input():
+    connection = create_connection()
+    if not connection:
+        raise HTTPException(status_code=500, detail="Database connection failed")
+    
+    cursor = connection.cursor(dictionary=True)
+    try: 
+        cursor.execute(
+            """
+            SELECT 
+                distance,
+                moving_time,
+                average_heartrate,
+                max_heartrate,
+                total_elevation_gain,
+                start_date
+            FROM activities 
+            ORDER BY start_date DESC 
+            LIMIT 10
+            """
+        )
+        activities = cursor.fetchall()
+        return activities
+    except Error as e:
+        print(f"Error fetching activities: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch weekly activities")
+    finally:
+        cursor.close()
+        connection.close()
 
 def get_existing_activity_ids(athlete_id):
     connection = create_connection()
@@ -310,6 +343,97 @@ async def get_stored_activities(athlete_id: int):
     finally:
         cursor.close()
         connection.close()
+
+@app.get("/activities/weeklysummary")
+async def return_weekly_data():
+    return weekly_summary_input()
+
+@app.post("/llm/analyze")
+async def analyze_activities(request: Request):
+    # Parse incoming JSON data from frontend
+    data = await request.json()
+    race_date = data.get("raceDate")
+    desired_time = data.get("desiredTime")
+    
+    # Get training data from database
+    training_data = weekly_summary_input()
+    
+    # Format the training data into a readable string
+    formatted_activities = []
+    for activity in training_data:
+        # Calculate pace (min/km)
+        pace_seconds = activity['moving_time'] / (activity['distance'] / 1000)
+        pace_minutes = pace_seconds / 60
+        pace_min = int(pace_minutes)
+        pace_sec = int((pace_minutes - pace_min) * 60)
+        
+        activity_str = (
+            f"Date: {activity['start_date'].strftime('%Y-%m-%d')}\n"
+            f"Distance: {activity['distance']/1000:.2f} km\n"
+            f"Duration: {activity['moving_time']/60:.0f} minutes\n"
+            f"Pace: {pace_min}:{pace_sec:02d} min/km\n"
+            f"Average Heart Rate: {activity['average_heartrate']:.0f} bpm\n"
+            f"Max Heart Rate: {activity['max_heartrate']:.0f} bpm\n"
+            f"Elevation Gain: {activity['total_elevation_gain']:.0f} meters\n"
+            "---"
+        )
+        formatted_activities.append(activity_str)
+    
+    activities_summary = "\n".join(formatted_activities)
+    
+    prompt = f"""As a running coach, analyze this athlete's training data and provide recommendations.
+
+Recent Training Activities:
+{activities_summary}
+
+Race Goals:
+- Target Race Date: {race_date}
+- Desired Race Time: {desired_time}
+
+Please provide:
+1. Current Fitness Assessment based on:
+   - Recent training paces
+   - Heart rate zones and cardiovascular fitness
+   - Training volume (distance and time)
+   - Elevation training
+2. Projected Race Time based on recent training data
+3. Specific workout recommendations for next week
+4. Areas for improvement and training adjustments
+
+Consider the relationship between heart rate and pace, training volume progression, and intensity distribution in your analysis.
+"""
+
+    try:
+        response = openai.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an experienced running coach who analyzes training data and provides detailed, actionable feedback and recommendations."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            max_tokens=1000,
+            temperature=0.7
+        )
+        
+        analysis = response.choices[0].message.content
+        
+        return {
+            "analysis": analysis,
+            "training_data_used": len(training_data),
+            "status": "success"
+        }
+        
+    except Exception as e:
+        print(f"Error calling OpenAI API: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to analyze training data"
+        )
 
 if __name__ == "__main__":
     import uvicorn
