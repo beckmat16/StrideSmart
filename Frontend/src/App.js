@@ -18,7 +18,50 @@ const AppContent = () => {
     const [activities, setActivities] = useState([]);
     const [athleteId, setAthleteId] = useState(null);
     const [error, setError] = useState(null);
+    const [isSyncing, setIsSyncing] = useState(false);
     const location = useLocation();
+
+    const fetchActivities = async (id) => {
+        try {
+            const response = await fetch(`${API_URL}/training?athlete_id=${id}`);
+            if (response.ok) {
+                const data = await response.json();
+                setActivities(data);
+                return data;
+            }
+            throw new Error("Failed to fetch activities");
+        } catch (error) {
+            console.error('Error fetching activities:', error);
+            setError("Unable to load activities. Please try again later.");
+            setIsAuthenticated(false);
+            localStorage.removeItem('isAuthenticated');
+            localStorage.removeItem('athleteId');
+            return [];
+        }
+    };
+
+    const pollActivitiesWhileSyncing = async (id) => {
+        setIsSyncing(true);
+        const maxAttempts = 45;
+
+        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+            const data = await fetchActivities(id);
+            if (data.length > 0) {
+                setIsSyncing(false);
+                return;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+
+        try {
+            await fetch(`${API_URL}/sync?athlete_id=${id}&full=true`, { method: 'POST' });
+            await fetchActivities(id);
+        } catch (syncError) {
+            console.error('Error during fallback sync:', syncError);
+        } finally {
+            setIsSyncing(false);
+        }
+    };
 
     useEffect(() => {
         const params = new URLSearchParams(location.search);
@@ -29,7 +72,9 @@ const AppContent = () => {
             console.log("Authentication successful for athlete:", newAthleteId);
             setIsAuthenticated(true);
             setAthleteId(newAthleteId);
-            fetchActivities(newAthleteId);
+            localStorage.setItem('isAuthenticated', 'true');
+            localStorage.setItem('athleteId', newAthleteId);
+            pollActivitiesWhileSyncing(newAthleteId);
         } else {
             const storedAuthState = localStorage.getItem('isAuthenticated');
             const storedAthleteId = localStorage.getItem('athleteId');
@@ -42,30 +87,12 @@ const AppContent = () => {
         }
     }, [location]);
 
-    const fetchActivities = async (id) => {
-        try {
-            const response = await fetch(`${API_URL}/training?athlete_id=${id}`);
-            if (response.ok) {
-                const data = await response.json();
-                setActivities(data);
-            } else {
-                throw new Error("Failed to fetch activities");
-            }
-        } catch (error) {
-            console.error('Error fetching activities:', error);
-            setError("Unable to load activities. Please try again later.");
-            setIsAuthenticated(false);
-            localStorage.removeItem('isAuthenticated');
-            localStorage.removeItem('athleteId');
-        }
-    };
-
     const handleAuthSuccess = (id) => {
         setIsAuthenticated(true);
         setAthleteId(id);
         localStorage.setItem('isAuthenticated', 'true');
         localStorage.setItem('athleteId', id);
-        fetchActivities(id);
+        pollActivitiesWhileSyncing(id);
     };
 
     return (
@@ -73,6 +100,9 @@ const AppContent = () => {
             <h1 className="app-title">StrideSmart</h1>
             
             {error && <div className="error-message">{error}</div>}
+            {isSyncing && (
+                <div className="sync-status">Syncing your Strava activity history...</div>
+            )}
             
             <Routes>
                 <Route path="/" element={
@@ -87,7 +117,12 @@ const AppContent = () => {
                 } />
                 <Route path="/dashboard" element={
                     isAuthenticated ? (
-                        <Dashboard activities={activities} isAuthenticated={isAuthenticated} athleteId={athleteId} />
+                        <Dashboard
+                            activities={activities}
+                            isAuthenticated={isAuthenticated}
+                            athleteId={athleteId}
+                            isSyncing={isSyncing}
+                        />
                     ) : (
                         <Navigate to="/" />
                     )

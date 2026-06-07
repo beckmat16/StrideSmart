@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import ActivityTable from './ActivityTable.js'; 
 import Graphs from './Graphs.js';
-import AITrainingPlan from './AITrainingPlan.js';
+import UnifiedAITrainingPlan from './UnifiedAITrainingPlan.js';
 import { meters_to_miles, convert_mile_pace, formatDate } from './utils';
 
-const Dashboard = ({ activities, isAuthenticated }) => {
+const Dashboard = ({ activities, isAuthenticated, athleteId, isSyncing }) => {
     const [activeTab, setActiveTab] = useState('all');
 
     useEffect(() => {
         console.log('Dashboard received activities:', activities);
         console.log('Dashboard isAuthenticated:', isAuthenticated);
-    }, [activities, isAuthenticated]);
+        console.log('Dashboard athleteId:', athleteId);
+    }, [activities, isAuthenticated, athleteId]);
 
     if (!isAuthenticated) {
         return <div>Please authenticate to view the dashboard.</div>;
@@ -32,17 +33,17 @@ const Dashboard = ({ activities, isAuthenticated }) => {
                     Performance Charts
                 </button>
                 <button 
-                    className={`tab-button ${activeTab === 'trainingPlan' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('trainingPlan')}
+                    className={`tab-button ${activeTab === 'aiTraining' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('aiTraining')}
                 >
-                    AI Training Plan
+                    AI Training Plan & Calendar
                 </button>
             </div>
 
             <div className="tab-content">
                 {activeTab === 'all' && (
                     <>
-                        <h2>Activities</h2>
+                        <h2>Activities {isSyncing ? '(syncing...)' : `(${activities?.length || 0})`}</h2>
                         <ActivityTable data={activities || []} />
                     </>
                 )}
@@ -52,10 +53,9 @@ const Dashboard = ({ activities, isAuthenticated }) => {
                         <Graphs activities={activities} />
                     </div>
                 )}
-                {activeTab === 'trainingPlan' && (
-                    <div className="training-plan-container">
-                        <h2>AI Training Plan</h2>
-                        <AITrainingPlan />
+                {activeTab === 'aiTraining' && (
+                    <div className="ai-training-container">
+                        <UnifiedAITrainingPlan athleteId={athleteId} />
                     </div>
                 )}
             </div>
